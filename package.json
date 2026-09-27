@@ -1,0 +1,55 @@
+{
+  "name": "dsh-agent-processes",
+  "version": "0.1.0",
+  "description": "Process & port lifecycle tools for DeepSeek Harness local agents (start/stop/list/logs/wait-ready + dock chip + Processes rightbar).",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "prepare": "node build.mjs || node -e \"console.warn('[dsh-agent-processes] prepare: build skipped (build toolchain unavailable); relying on prebuilt lib/')\""
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "process",
+    "port",
+    "agent-tools"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ]
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.0",
+    "esbuild": "^0.25.0",
+    "react": "^18.3.0",
+    "typescript": "^5.6.0"
+  },
+  "author": {
+    "name": "Jan (HagbardCeline)",
+    "email": "jandareal@gmail.com"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}

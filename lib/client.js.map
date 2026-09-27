@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../src/client/index.tsx"],
+  "sourcesContent": ["/**\n * Browser half of dsh-agent-processes. (M1 stub)\n *\n * M1: no-op client \u2014 proves the dual-face install loads without throwing.\n * M4: Processes rightbar tab + dock chip (mirror gpu-monitor / slot-health /\n * long-horizon seats: sidebarRightTabs type, sidebar.right.pane.tab body/title,\n * conversation.composer.dock chip).\n */\nimport type { Context } from '@deepseek-ai/cordis'\n\nexport const name = 'dsh-agent-processes'\nexport const inject: string[] = []\n\nexport function apply(_ctx: Context): void {\n  // M1: no UI yet; keep a valid apply() so the ModuleLoader factory loads clean.\n}\n"],
+  "mappings": ";;;;;;;;;;;;;;;;;;;;;;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAAA;AAUO,IAAM,OAAO;AACb,IAAM,SAAmB,CAAC;AAE1B,SAAS,MAAM,MAAqB;AAE3C;",
+  "names": []
+}
