@@ -42,6 +42,33 @@ await build({
   logLevel: 'warning',
 })
 
+// ---- vault (testable pure module) -------------------------------------------
+// Rebuilt as a standalone entry (no externals — pure node builtins) so unit
+// tests can import the storage layer directly, per the dsh-slot-health pattern.
+await build({
+  entryPoints: [join(root, 'src/host/vault.ts')],
+  outfile: join(root, 'lib/vault.mjs'),
+  bundle: true,
+  format: 'esm',
+  platform: 'node',
+  target: 'es2024',
+  sourcemap: true,
+  logLevel: 'warning',
+})
+
+// ---- service (testable pure module) -----------------------------------------
+// Lifecycle logic without the cordis externals of the host bundle.
+await build({
+  entryPoints: [join(root, 'src/host/service.ts')],
+  outfile: join(root, 'lib/service.mjs'),
+  bundle: true,
+  format: 'esm',
+  platform: 'node',
+  target: 'es2024',
+  sourcemap: true,
+  logLevel: 'warning',
+})
+
 await build({
   entryPoints: [join(root, 'src/client/index.tsx')],
   outfile: join(root, 'lib/client.js'),

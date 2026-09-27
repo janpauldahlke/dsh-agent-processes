@@ -16,7 +16,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "node build.mjs",
+    "build": "node build.mjs && tsc --noEmit",
+    "test": "node --test",
     "prepare": "node build.mjs || node -e \"console.warn('[dsh-agent-processes] prepare: build skipped (build toolchain unavailable); relying on prebuilt lib/')\""
   },
   "keywords": [
