@@ -53,6 +53,9 @@ type ExecLike = {
 
 const GRACE_MS = 3000
 const POLL_MS = 100
+const READY_TIMEOUT_MS = 15000
+const READY_POLL_MS = 250
+const LOG_PREVIEW_LINES = 20
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -143,6 +146,30 @@ export class ProcessService {
       throw new ValidationError('port must be an integer 1-65535')
     }
 
+    // M3 — reclaim: a tracked, live holder of the expected port is stopped
+    // first (EADDRINUSE recovery). Foreign holders are never killed (S5).
+    let reclaimed: string[] | undefined
+    if (port !== undefined) {
+      const vault = await loadVault(this.vaultFile)
+      const holders = Object.values(vault.processes).filter(
+        (rec) => rec.port === port && rec.state === 'running' && isAlive(rec.pid),
+      )
+      if (holders.length > 0) {
+        reclaimed = []
+        for (const holder of holders) {
+          await this.stop(holder.id)
+          reclaimed.push(holder.id)
+        }
+      }
+      if (await portOpen(port)) {
+        throw new ValidationError(
+          `port ${port} is already held by a process this plugin does not track — `
+          + 'refusing to kill it. Free the port (or stop the holder) and retry; '
+          + 'use process_list to see tracked processes',
+        )
+      }
+    }
+
     const id = args.name?.trim() ? slugify(args.name) : `p-${Date.now().toString(36)}`
     const log = logFile(this.storageRoot, id)
     mkdirSync(dirname(log), { recursive: true })
@@ -181,6 +208,31 @@ export class ProcessService {
     const vault: Vault = await loadVault(this.vaultFile)
     vault.processes[id] = record
     await saveVault(this.storageRoot, vault)
+
+    // M3 — watch: with a port, wait until it accepts connections (or the
+    // timeout elapses) and attach a short log preview either way.
+    if (port !== undefined) {
+      const timeout = args.readyTimeoutMs ?? READY_TIMEOUT_MS
+      const started = Date.now()
+      let ready = false
+      while (Date.now() - started < timeout) {
+        if (await portOpen(port)) {
+          ready = true
+          break
+        }
+        await sleep(READY_POLL_MS)
+      }
+      const preview = await this.logs(id, LOG_PREVIEW_LINES)
+      return {
+        ok: true,
+        record,
+        ...(reclaimed && reclaimed.length > 0 ? { reclaimed } : {}),
+        ready,
+        waitedMs: Date.now() - started,
+        logPreview: preview.lines,
+        ...(!ready ? { error: 'port-timeout' } : {}),
+      }
+    }
     return { ok: true, record }
   }
 

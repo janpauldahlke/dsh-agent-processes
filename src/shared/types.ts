@@ -42,6 +42,8 @@ export interface StartArgs {
   port?: number
   /** Friendly name; slugified into the record id. */
   name?: string
+  /** Max ms to wait for the port to accept connections (only with port). */
+  readyTimeoutMs?: number
 }
 
 export interface ProcessView extends ProcessRecord {
@@ -87,4 +89,14 @@ export interface ListResult {
 export interface StartResult {
   ok: true
   record: ProcessRecord
+  /** Only when a port was given: tracked holder ids stopped before spawn. */
+  reclaimed?: string[]
+  /** Only when a port was given: whether the port now accepts connections. */
+  ready?: boolean
+  /** Only when a port was given: ms spent waiting for readiness. */
+  waitedMs?: number
+  /** Only when a port was given: trailing log lines (≤20) at return time. */
+  logPreview?: string[]
+  /** Only when a port was given and not ready: 'port-timeout'. */
+  error?: string
 }

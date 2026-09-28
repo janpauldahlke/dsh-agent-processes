@@ -103,8 +103,11 @@ export function registerTools(ctx: Context, service: ProcessService): () => void
     name: 'process_start',
     description:
       'Start a tracked background process (detached daemon; survives this session). '
-      + 'stdout+stderr are captured to a log. Optionally pass a port for wait_ready. '
-      + 'Returns the record (id, pid, logPath, …).',
+      + 'stdout+stderr are captured to a log. '
+      + 'With a port: any tracked process holding that port is stopped first (reclaim), '
+      + 'a foreign untracked holder is an error (never killed), and the call waits until '
+      + 'the port accepts connections (readyTimeoutMs, default 15000) returning ready, '
+      + 'waitedMs, and ~20 log lines. Returns the record (id, pid, logPath, …).',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -114,8 +117,9 @@ export function registerTools(ctx: Context, service: ProcessService): () => void
         args: { type: 'array', items: { type: 'string' }, description: 'Arguments.' },
         cwd: { type: 'string', description: 'Spawn cwd (defaults to session cwd).' },
         env: { type: 'object', additionalProperties: true, description: 'Extra env vars (string → string).' },
-        port: { type: 'integer', description: 'Expected listen port (for wait_ready / port watch).' },
+        port: { type: 'integer', description: 'Expected listen port (reclaim + readiness watch).' },
         name: { type: 'string', description: 'Friendly name; slugified into the id.' },
+        readyTimeoutMs: { type: 'integer', description: 'Max ms to wait for the port (default 15000).' },
       },
     },
     output: {
@@ -130,6 +134,11 @@ export function registerTools(ctx: Context, service: ProcessService): () => void
             additionalProperties: true,
             properties: recordProps,
           },
+          reclaimed: { type: 'array', items: { type: 'string' } },
+          ready: { type: 'boolean' },
+          waitedMs: { type: 'integer' },
+          logPreview: { type: 'array', items: { type: 'string' } },
+          error: { type: 'string' },
         },
       },
       render: renderJson,
@@ -143,6 +152,7 @@ export function registerTools(ctx: Context, service: ProcessService): () => void
           env: args.env,
           port: args.port,
           name: args.name,
+          readyTimeoutMs: args.readyTimeoutMs,
         }, exec)
         return out
       } catch (err) {

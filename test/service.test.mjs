@@ -7,6 +7,8 @@
  *   - list: liveness derived on read, dead-marking of natural exits;
  *   - logs: tail of captured stdout, ENOENT tolerance;
  *   - waitReady: TCP port poll → ready / validation / timeout;
+ *   - start (M3): port watch (ready/waitedMs/logPreview/timeout),
+ *     reclaim of tracked holders, foreign-holder refusal (no silent kill);
  *   - stop: SIGTERM group kill, idempotence, NotFound on unknown id;
  *   - remove: record + log file gone.
  *
@@ -318,6 +320,117 @@ process.on('SIGTERM', () => { console.log('parent sigterm'); });
       }),
     )
     assert.ok(grandchildGone, 'grandchild (same group) was reaped')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+// ---------- M3: port watch + reclaim ----------
+
+test('start (port): waits for readiness, returns preview; timeout is an error state', async () => {
+  const root = await tmpRoot()
+  const svc = new ProcessService(root)
+  try {
+    const port = await freePort()
+    const { record, ready, waitedMs, logPreview, error } = await svc.start({
+      cmd: 'node', args: ['-e', TOY_SERVER, String(port)], name: 'watched', port,
+    })
+    assert.equal(ready, true, 'ready when the port accepts connections')
+    assert.ok(waitedMs >= 0 && waitedMs < 15000)
+    assert.ok(Array.isArray(logPreview))
+    assert.ok(logPreview.some((line) => line.includes('toy-ready port=' + port)), 'preview includes the ready banner')
+    assert.equal(error, undefined)
+    await svc.stop('watched')
+
+    // Timeout path: a process that never opens the port.
+    const port2 = await freePort()
+    const out = await svc.start({
+      cmd: 'node', args: ['-e', 'console.log("slow boot"); setTimeout(()=>{},60000)'],
+      name: 'slow-start', port: port2, readyTimeoutMs: 1000,
+    })
+    assert.equal(out.ready, false)
+    assert.equal(out.error, 'port-timeout')
+    assert.ok(out.waitedMs >= 900)
+    assert.ok(Array.isArray(out.logPreview))
+    assert.ok(out.logPreview.some((line) => line.includes('slow boot')))
+    assert.equal(out.reclaimed, undefined, 'no reclaim without a tracked holder')
+    await svc.stop('slow-start')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('start (port): reclaims a tracked holder — old stopped, new ready', async () => {
+  const root = await tmpRoot()
+  const svc = new ProcessService(root)
+  const port = await freePort()
+  try {
+    const first = await svc.start({ cmd: 'node', args: ['-e', TOY_SERVER, String(port)], name: 'first', port })
+    assert.equal(first.ready, true)
+
+    const second = await svc.start({ cmd: 'node', args: ['-e', TOY_SERVER, String(port)], name: 'second', port })
+    assert.equal(second.ready, true, 'new holder is listening')
+    assert.deepEqual(second.reclaimed, ['first'], 'old tracked holder id reported')
+
+    const { processes } = await svc.list()
+    const a = processes.find((p) => p.id === 'first')
+    const b = processes.find((p) => p.id === 'second')
+    assert.equal(a.state, 'stopped', 'old holder stopped (not dead — we signalled it)')
+    assert.equal(a.alive, false)
+    assert.equal(b.state, 'running')
+    assert.equal(b.alive, true)
+
+    const firstLogs = await svc.logs('first')
+    assert.ok(firstLogs.lines.some((line) => line.includes('toy-sigterm')), 'old holder got a clean SIGTERM')
+  } finally {
+    await svc.stop('first').catch(() => {})
+    await svc.stop('second').catch(() => {})
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('start (port): foreign untracked listener → ValidationError, no kill', async () => {
+  const root = await tmpRoot()
+  const svc = new ProcessService(root)
+  const port = await freePort()
+  const net = await import('node:net')
+  const foreign = net.createServer()
+  foreign.listen(port, '127.0.0.1')
+  await new Promise((r) => foreign.once('listening', r))
+  try {
+    const before = (await svc.list()).count
+    await assert.rejects(
+      () => svc.start({ cmd: 'node', args: ['-e', 'setTimeout(()=>{},60000)'], name: 'blocked', port }),
+      (err) => {
+        assert.ok(err instanceof ValidationError)
+        assert.match(err.message, /already held/i)
+        return true
+      },
+    )
+    // foreign server untouched, no record created
+    const stillListening = await new Promise((resolve) => {
+      const probe = net.connect({ port, host: '127.0.0.1' })
+      probe.once('connect', () => { probe.destroy(); resolve(true) })
+      probe.once('error', () => resolve(false))
+    })
+    assert.equal(stillListening, true, 'foreign listener was not killed')
+    assert.equal((await svc.list()).count, before, 'no record created on refusal')
+  } finally {
+    foreign.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('start (no port): no readiness fields', async () => {
+  const root = await tmpRoot()
+  const svc = new ProcessService(root)
+  try {
+    const out = await svc.start({ cmd: 'node', args: ['-e', 'setTimeout(()=>{},60000)'], name: 'plain' })
+    assert.equal(out.ready, undefined)
+    assert.equal(out.reclaimed, undefined)
+    assert.equal(out.logPreview, undefined)
+    assert.equal(out.error, undefined)
+    await svc.stop('plain')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
