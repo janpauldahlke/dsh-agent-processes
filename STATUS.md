@@ -1,32 +1,46 @@
 # dsh-agent-processes
 
 - **Long horizon:** OFF for this build (human order 2026-09-28: no `status_*` tools; this file is hand-curated)
-- **Phase:** M5 — AGENTS.md snippet in README + dogfood smoke (M4 done & committed)
+- **Phase:** M6 — long-horizon compose demo + README acceptance (M5 done & committed)
 - **cwd:** `/home/hagbard/dev/dsh-agent-processes`
 - **Updated:** 2026-09-28 (hand-curated; authoritative memory is `agent/NOTES.md`)
 
 ## Now
 
-- **In flight:** M5 — write the AGENTS.md "how to use this plugin" snippet into the
-  README, then a dogfood smoke that drives the real `:3090` agent loop:
-  `process_start` a toy → `curl` the live port → `process_stop`, with evidence
-  captured under `agent/`.
+- **In flight:** M6 — both plugins confirmed installed on the web profile
+  (long-horizon + agent-processes, `link:` deps). Compose demo
+  (`agent/compose-m6.mjs`): scratch toy cwd with an 8-step plan →
+  `status_init`/`setNext` (sibling `TaskStatusService` from its built lib,
+  real vault) → `process_start` toy server → curl OK → toy **crashes** →
+  crash detected via `process_list`/`process_logs` (not raw bash) →
+  `status_block(reason)` → `process_start` again → curl OK →
+  `status_unblock` → `markDone`. Evidence under `agent/evidence/m6/` (vault
+  snapshots per phase + transcript). Then: README final pass (UI map +
+  compose + limitations already drafted), PLAN §12 acceptance checklist,
+  commit, morning summary.
 - **Next 3:**
-  1. M5 README section: install (`dsh plugin --profile web add <abs>`), the six
-     `process_*` tools, the `GET/POST /api/dsh-agent-processes` route, the dock
-     chip + Processes rightbar tab, reclaim/ready semantics, storage layout,
-     uninstall.
-  2. M5 dogfood smoke (`agent/dogfood-m5.mjs`): against the live `:3090`, start a
-     toy server via the built lib, `curl` its port, then stop + remove via the
-     route; assert the chip-state derivation flips hidden → running → hidden.
-  3. M5 commit → M6 (long-horizon compose: crash a tracked proc → `status_block`
-     → recover → `status_unblock`; full README; PLAN §12 acceptance checklist)
-     → morning summary.
-- **Then:** M6 + final README + acceptance checklist → crisp morning summary
-  (what shipped, evidence paths, what awaits a human UI glance).
+  1. `agent/compose-m6.mjs` — crash → block → recover → unblock, evidenced.
+  2. Run it; capture vault snapshots (long-horizon vault + process vault) at
+     each phase to `agent/evidence/m6/`; clean up toy cwd (D5) + vaults.
+  3. README final pass + PLAN §12 checklist (UI items stay `pending-human`) →
+     commit M6 → morning summary (what shipped, evidence paths, UI glance).
 
 ## Done (recent)
 
+- ✓ M5: AGENTS.md snippet + dogfood smoke — full README (install, 6 tools with
+  exact signatures, route, UI state table, copy-paste AGENTS.md snippet,
+  storage layout, compose note, limitations, uninstall); dogfood
+  `agent/dogfood-m5.mjs` plays an agent in a scratch toy cwd whose AGENTS.md is
+  the README snippet itself: every lifecycle action through the real
+  `process_*` tool `execute()`s (session-cwd exec context), plain HTTP client
+  for the curl; start (ready 251ms) → /health 200 → list/logs/wait_ready →
+  stop (SIGTERM 101ms, pid gone) → **re-start on same port** (no EADDRINUSE,
+  new pid) → stop → vault restored to empty baseline, no ps leftovers, toy
+  cwd deleted (D5) · verify: 17/17 asserts, evidence
+  `agent/evidence/m5/{dogfood-transcript.json,dogfood-summary.md}`; `:3090`
+  healthy on the shared vault · commit: this commit
+  · doc fix caught by dogfood: `process_wait_ready` takes `{id,timeoutMs?,pollMs?}`
+  (record-scoped, M2 frozen seam), not a raw port — README aligned to impl
 - ✓ M4: dock chip + Processes rightbar tab + HTTP route — host: `argv` persisted
   on records for lossless restart; `restart(id)` (stop + re-run same argv, same
   id); `snapshotForRoute()` (list + ≤20-line log preview + host-side TCP ready
