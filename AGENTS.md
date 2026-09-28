@@ -4,6 +4,20 @@ You are implementing this installable dsh plugin. Pin and stack: `ENV.md`
 (overnite/slot-health style — stack is already up; you do not start llama / `:3080`).
 Resume: `agent/STATUS.md` first, then SPEC/PLAN as pointed there.
 
+## Overnight directive (2026-09-28)
+
+**The user is asleep. Implement the FULL plan, all phases, without stopping
+after each phase.** Goal: surprise them in the morning with the **complete,
+tested plan** — M3 (port watch + reclaim) → M4 (dock chip + Processes rightbar
++ GET route) → M5 (AGENTS.md snippet + dogfood smoke) → M6 (long-horizon
+compose + README) — each verified and committed. Do not pause to ask; only stop
+if truly blocked (then record the blocker in `agent/NOTES.md` and stop).
+Per the human's direct order (2026-09-28): do **not** call `status_*` tools and
+do **not** write `STATUS.md`, `agent/STATUS.md`, or anything under `.dsh/` —
+`agent/NOTES.md` is the on-disk memory. Keep the
+`:3090` acceptance instance authoritative. When done, leave a crisp morning
+summary (what shipped, evidence paths, what awaits the human UI glance).
+
 ## Long horizon (required)
 
 `dsh-local-long-horizon` is installed. Treat it as the seatbelt:

@@ -9,6 +9,8 @@ export interface ProcessRecord {
   pid: number
   /** Full command line, argv joined for display. */
   cmd: string
+  /** Lossless argv (kept for UI Restart — re-runs the exact command). */
+  argv?: string[]
   /** Working directory the child was spawned in. */
   cwd: string
   /** Port to watch, when the caller gave one. */
@@ -49,6 +51,30 @@ export interface StartArgs {
 export interface ProcessView extends ProcessRecord {
   /** Live liveness check at read time (kill(pid, 0)). */
   alive: boolean
+}
+
+export interface RouteProcessView extends ProcessView {
+  /** Last few captured log lines (host-side tail, for the card preview). */
+  logPreview: string[]
+  /**
+   * Only for running records with a port: whether the port accepted a TCP
+   * connect at snapshot time (false while the child is still booting).
+   */
+  ready?: boolean
+}
+
+export interface RouteSnapshot {
+  ok: true
+  package: string
+  version: string
+  storageRoot: string
+  count: number
+  processes: RouteProcessView[]
+}
+
+export interface RouteSnapshotError {
+  ok: false
+  error: string
 }
 
 export interface StopResult {

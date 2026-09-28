@@ -25,6 +25,8 @@ import type {
   LogsResult,
   ProcessRecord,
   ProcessView,
+  RouteProcessView,
+  RouteSnapshot,
   StartArgs,
   StartResult,
   StopResult,
@@ -199,6 +201,7 @@ export class ProcessService {
       id,
       pid: child.pid ?? -1,
       cmd: [cmd, ...(args.args ?? [])].join(' '),
+      argv: [cmd, ...(args.args ?? [])],
       cwd,
       ...(port !== undefined ? { port } : {}),
       logPath: log,
@@ -285,6 +288,60 @@ export class ProcessService {
       graceMs: GRACE_MS,
       elapsedMs: Date.now() - started,
       state: rec.state,
+    }
+  }
+
+  /**
+   * UI Restart: stop the current holder (if alive) and re-run the exact
+   * recorded argv under the same id, so the card keeps its identity.
+   */
+  async restart(id: string, exec?: ExecLike): Promise<StartResult> {
+    const vault = await loadVault(this.vaultFile)
+    const rec = this.getRecord(vault.processes, id)
+    if (rec.state === 'running' && isAlive(rec.pid)) {
+      await this.stop(id)
+    }
+    if (!rec.argv || rec.argv.length === 0) {
+      throw new ValidationError(`process "${id}" has no stored argv to restart`)
+    }
+    const [cmd, ...args] = rec.argv
+    return await this.start({
+      cmd,
+      ...(args.length > 0 ? { args } : {}),
+      cwd: rec.cwd,
+      ...(rec.port !== undefined ? { port: rec.port } : {}),
+      name: id,
+    }, exec)
+  }
+
+  /**
+   * Route snapshot for the Processes pane / dock chip (PLAN §8.3): every
+   * record with a live liveness check, a short log preview, and — for
+   * running records with a port — a TCP connect probe so the client can
+   * tell "starting" from "healthy" without its own probe.
+   */
+  async snapshotForRoute(): Promise<RouteSnapshot> {
+    const base = await this.list()
+    const processes: RouteProcessView[] = await Promise.all(
+      base.processes.map(async (view) => {
+        let preview: string[] = []
+        try {
+          const res = await this.logs(view.id, LOG_PREVIEW_LINES)
+          preview = res.lines
+        } catch {
+          // log file missing/unreadable — preview stays empty
+        }
+        const ready = view.alive && view.port !== undefined ? await portOpen(view.port) : undefined
+        return { ...view, logPreview: preview, ...(ready !== undefined ? { ready } : {}) }
+      }),
+    )
+    return {
+      ok: true,
+      package: 'dsh-agent-processes',
+      version: '0.1.0',
+      storageRoot: base.storageRoot,
+      count: processes.length,
+      processes,
     }
   }
 

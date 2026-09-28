@@ -435,3 +435,79 @@ test('start (no port): no readiness fields', async () => {
     await rm(root, { recursive: true, force: true })
   }
 })
+
+// ---------------------------------------------------------------------------
+// M4 — restart + route snapshot
+// ---------------------------------------------------------------------------
+
+test('restart: re-runs the same argv under the same id', async () => {
+  const root = await tmpRoot()
+  const svc = new ProcessService(root)
+  const port = await freePort()
+  try {
+    const first = await svc.start({
+      cmd: 'node', args: ['-e', TOY_SERVER, String(port)],
+      name: 'restart-me', port, readyTimeoutMs: 8000,
+    })
+    assert.equal(first.ready, true, 'first instance ready')
+    const firstPid = first.record.pid
+    assert.deepEqual(first.record.argv, ['node', '-e', TOY_SERVER, String(port)], 'argv persisted losslessly')
+
+    const second = await svc.restart('restart-me')
+    assert.equal(second.record.id, 'restart-me', 'same id after restart')
+    assert.ok(second.record.pid > 0 && second.record.pid !== firstPid, 'new pid after restart')
+    assert.equal(second.record.port, port)
+    assert.equal(second.ready, true, 'restarted instance ready')
+    assert.equal(second.reclaimed, undefined, 'no separate reclaim report for self-restart')
+
+    const list = await svc.list()
+    assert.equal(list.count, 1, 'restart overwrote the record, not a second one')
+    assert.equal(list.processes[0].pid, second.record.pid)
+
+    await assert.rejects(
+      () => svc.restart('no-such-id'),
+      (err) => err instanceof NotFoundError,
+    )
+  } finally {
+    await svc.stop('restart-me').catch(() => {})
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('snapshotForRoute: previews + ready probe per ported record', async () => {
+  const root = await tmpRoot()
+  const svc = new ProcessService(root)
+  const port = await freePort()
+  try {
+    await svc.start({ cmd: 'node', args: ['-e', TOY_SERVER, String(port)], name: 'snap-server', port })
+    await svc.start({ cmd: 'node', args: ['-e', 'console.log("snap-plain"); setTimeout(()=>{},60000)'], name: 'snap-plain' })
+
+    // the child is detached; wait for its first line to land before snapshotting
+    for (let i = 0; i < 50; i++) {
+      if ((await svc.logs('snap-plain', 50)).lines.some((l) => l.includes('snap-plain'))) break
+      await new Promise((r) => setTimeout(r, 100))
+    }
+
+    const snap = await svc.snapshotForRoute()
+    assert.equal(snap.ok, true)
+    assert.equal(snap.package, 'dsh-agent-processes')
+    assert.equal(snap.storageRoot, root)
+    assert.equal(snap.count, 2)
+    assert.equal(snap.processes.length, 2)
+
+    const server = snap.processes.find((p) => p.id === 'snap-server')
+    assert.ok(server, 'ported record present')
+    assert.equal(server.alive, true)
+    assert.equal(server.ready, true, 'running ported record probed ready')
+    assert.ok(Array.isArray(server.logPreview), 'log preview array')
+
+    const plain = snap.processes.find((p) => p.id === 'snap-plain')
+    assert.ok(plain, 'plain record present')
+    assert.equal(plain.ready, undefined, 'no ready probe without a port')
+    assert.ok(plain.logPreview.some((l) => l.includes('snap-plain')), 'preview has the line')
+  } finally {
+    await svc.stop('snap-server').catch(() => {})
+    await svc.stop('snap-plain').catch(() => {})
+    await rm(root, { recursive: true, force: true })
+  }
+})

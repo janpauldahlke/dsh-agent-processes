@@ -55,6 +55,7 @@ const recordProps = {
   id: { type: 'string' },
   pid: { type: 'integer' },
   cmd: { type: 'string' },
+  argv: { type: 'array', items: { type: 'string' } },
   cwd: { type: 'string' },
   port: { type: 'integer' },
   logPath: { type: 'string' },
