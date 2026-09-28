@@ -1,31 +1,36 @@
 # dsh-agent-processes
 
 - **Long horizon:** OFF for this build (human order 2026-09-28: no `status_*` tools; this file is hand-curated)
-- **Phase:** M6 — long-horizon compose demo + README acceptance (M5 done & committed)
+- **Phase:** **DONE** — M1–M6 all implemented, verified, committed (2026-09-28)
 - **cwd:** `/home/hagbard/dev/dsh-agent-processes`
-- **Updated:** 2026-09-28 (hand-curated; authoritative memory is `agent/NOTES.md`)
+- **Updated:** 2026-09-28 ~05:50 local (hand-curated; authoritative memory is `agent/NOTES.md`)
 
 ## Now
 
-- **In flight:** M6 — both plugins confirmed installed on the web profile
-  (long-horizon + agent-processes, `link:` deps). Compose demo
-  (`agent/compose-m6.mjs`): scratch toy cwd with an 8-step plan →
-  `status_init`/`setNext` (sibling `TaskStatusService` from its built lib,
-  real vault) → `process_start` toy server → curl OK → toy **crashes** →
-  crash detected via `process_list`/`process_logs` (not raw bash) →
-  `status_block(reason)` → `process_start` again → curl OK →
-  `status_unblock` → `markDone`. Evidence under `agent/evidence/m6/` (vault
-  snapshots per phase + transcript). Then: README final pass (UI map +
-  compose + limitations already drafted), PLAN §12 acceptance checklist,
-  commit, morning summary.
-- **Next 3:**
-  1. `agent/compose-m6.mjs` — crash → block → recover → unblock, evidenced.
-  2. Run it; capture vault snapshots (long-horizon vault + process vault) at
-     each phase to `agent/evidence/m6/`; clean up toy cwd (D5) + vaults.
-  3. README final pass + PLAN §12 checklist (UI items stay `pending-human`) →
-     commit M6 → morning summary (what shipped, evidence paths, UI glance).
+- **All phases shipped.** Awaits the human's morning review: UI glance
+  (dock chip + Processes rightbar on `:3080`/`:3090` — `pending-human`, no
+  vision path) and a read of the README + evidence.
+- **Acceptance instance:** `:3090` (pid 397421, started 02:37) alive, plugin
+  route `GET /api/dsh-agent-processes` → 200 JSON, process vault at empty
+  baseline. `:3080` (pid 281163, started 01:10 — the 05:22 `dsh web`
+  re-start attempt hit `EADDRINUSE` against it and did not replace it).
+- **Next 3 (human):** 1. Glance at the dock chip / Processes tab on a live
+  instance (start any process via the agent or `POST` the route). 2. Read
+  README top→bottom. 3. Judge the compose demo transcript
+  (`agent/evidence/m6/`).
 
 ## Done (recent)
+
+- ✓ M6: long-horizon compose demo + README ship doc — `agent/compose-m6.mjs`:
+  scratch toy cwd (crashes on request #3) with a real long-horizon vault (sibling
+  `TaskStatusService` from its built lib) + the real built `process_*` tools →
+  8-step plan → start (:3972 ready) → /health 200 ×3 → **crash detected via
+  `process_logs`/`process_list`, no raw bash** → `status_block` → stop →
+  re-start (new pid ready) → /health 200 → `status_unblock` → plan finished
+  clean (next empty, in-flight null, blocked null) · verify: 18/18 asserts
+  (`status:"pass"`), vault snapshots per phase in `agent/evidence/m6/`
+  (01-initialized … 05-recovered), vaults + toy cwd cleaned (D5), 0 leftover
+  pids · README status line → M6 all-phases-shipped · commit: this commit
 
 - ✓ M5: AGENTS.md snippet + dogfood smoke — full README (install, 6 tools with
   exact signatures, route, UI state table, copy-paste AGENTS.md snippet,
@@ -82,5 +87,5 @@
   · verify: dump-config row present; `:3090` boots, client bundle 200,
   host probe PASS · commit `f7eac3a`
 
-*Last write:* hand-curated by the build agent, 2026-09-28 (M4 committed).
+*Last write:* hand-curated by the build agent, 2026-09-28 ~05:50 local (M6 committed — all phases done).
 Branch `main`; commits per phase, no push.

@@ -2,7 +2,7 @@
 
 Installable [DeepSeek Harness](https://github.com/deepseek-ai) (`dsh`) plugin: **host-owned** process & port lifecycle for local coding agents.
 
-**Status:** M5 — lifecycle tools + port watch/reclaim + dock chip + Processes rightbar + `GET/POST` route; dogfood `process_start → curl → process_stop` green (evidence in `agent/evidence/m5/`). M6 (long-horizon compose) next.
+**Status:** **M6 — all phases shipped** (2026-09-28). Lifecycle tools + port watch/reclaim + dock chip + Processes rightbar + `GET/POST` route; dogfood `process_start → curl → process_stop` green (evidence in `agent/evidence/m5/`); long-horizon compose demo — crash → `status_block` → restart → `status_unblock` — green (evidence in `agent/evidence/m6/`). UI rendering awaits the human's visual glance (see [Limitations](#limitations-v0)).
 **Pin:** `dsh` **0.1.7-rc.2** · package `dsh-agent-processes`
 **Sibling:** `dsh-local-long-horizon` (compose partner — see [Composing](#composing-with-dsh-local-long-horizon))
 **Implementer:** local DSH agent via `dsh web`; human is the UI oracle
