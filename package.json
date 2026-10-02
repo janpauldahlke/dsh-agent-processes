@@ -1,7 +1,7 @@
 {
   "name": "dsh-agent-processes",
-  "version": "0.1.0",
-  "description": "Process & port lifecycle tools for DeepSeek Harness local agents (start/stop/list/logs/wait-ready + dock chip + Processes rightbar).",
+  "version": "1.0.0",
+  "description": "Host-owned process & port lifecycle for DeepSeek Harness local agents (start/stop/list/logs/wait-ready + dock chip + Processes rightbar).",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -13,11 +13,21 @@
     "lib",
     "cordis.patch.yml",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "media"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/janpauldahlke/dsh-agent-processes.git"
+  },
+  "homepage": "https://github.com/janpauldahlke/dsh-agent-processes#readme",
+  "bugs": {
+    "url": "https://github.com/janpauldahlke/dsh-agent-processes/issues"
+  },
   "scripts": {
     "build": "node build.mjs && tsc --noEmit",
     "test": "node --test",
+    "smoke": "node scripts/lifecycle-smoke.mjs",
     "prepare": "node build.mjs || node -e \"console.warn('[dsh-agent-processes] prepare: build skipped (build toolchain unavailable); relying on prebuilt lib/')\""
   },
   "keywords": [

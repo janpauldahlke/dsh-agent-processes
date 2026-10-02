@@ -338,7 +338,7 @@ export class ProcessService {
     return {
       ok: true,
       package: 'dsh-agent-processes',
-      version: '0.1.0',
+      version: '1.0.0',
       storageRoot: base.storageRoot,
       count: processes.length,
       processes,

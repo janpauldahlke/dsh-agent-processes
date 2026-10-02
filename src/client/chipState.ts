@@ -2,10 +2,10 @@
  * Dock-chip state derivation — PLAN §8.1 table:
  *
  *   Nothing running → (hidden)
- *   1 healthy       → `⚡ :3000 · next dev`
- *   N running       → `⚡ N running · :3000, :5432`
- *   Crashed         → `⚠ N crashed · :3000`
- *   Starting        → `⚡ starting…`
+ *   1 healthy       → `Processes · :3000`
+ *   N running       → `Processes · 3 running`
+ *   Crashed         → `Processes · 1 crashed`
+ *   Starting        → `Processes · starting…`
  *
  * Records are scoped to the followed workspace cwd when one is known.
  */
@@ -73,11 +73,11 @@ function portList(ports: number[]): string {
 
 export function deriveChip(snap: RouteResult | null, error: string | null, followedCwd: string | null): ChipDisplay {
   if (error) {
-    return { hidden: false, label: '⚡ processes', dot: '#ef4444', dim: false, title: `Processes route error: ${error}` }
+    return { hidden: false, label: 'Processes · error', dot: '#ef4444', dim: false, title: `Processes route error: ${error}` }
   }
   if (!snap) return HIDDEN
   if (snap.ok !== true) {
-    return { hidden: false, label: '⚡ processes', dot: '#ef4444', dim: false, title: snap.error }
+    return { hidden: false, label: 'Processes · error', dot: '#ef4444', dim: false, title: snap.error }
   }
   const model = derive(snap, followedCwd)
   if (!model) return HIDDEN
@@ -91,7 +91,7 @@ export function deriveChip(snap: RouteResult | null, error: string | null, follo
       .join(', ')
     return {
       hidden: false,
-      label: `⚠ ${model.crashed.length} crashed${ports ? ` · ${ports}` : ''}`,
+      label: `Processes · ${model.crashed.length} crashed${ports ? ` · ${ports}` : ''}`,
       dot: '#ef4444',
       dim: false,
       title: `Crashed: ${model.crashed.map((p) => p.id).join(', ')}`,
@@ -103,16 +103,16 @@ export function deriveChip(snap: RouteResult | null, error: string | null, follo
     if (only.port !== undefined && only.ready === false) {
       return {
         hidden: false,
-        label: '⚡ starting…',
+        label: 'Processes · starting…',
         dot: '#fbbf24',
         dim: false,
         title: `${only.id} is starting on :${only.port}`,
       }
     }
-    const port = typeof only.port === 'number' ? `:${only.port} · ` : ''
+    const port = typeof only.port === 'number' ? `:${only.port}` : only.id
     return {
       hidden: false,
-      label: `⚡ ${port}${only.id}`,
+      label: `Processes · ${port}`,
       dot: '#22c55e',
       dim: false,
       title: `${only.id} (pid ${only.pid}) — ${only.cmd}`,
@@ -120,7 +120,7 @@ export function deriveChip(snap: RouteResult | null, error: string | null, follo
   }
   return {
     hidden: false,
-    label: `⚡ ${model.running.length} running${portList(model.ports) ? ` · ${portList(model.ports)}` : ''}`,
+    label: `Processes · ${model.running.length} running${portList(model.ports) ? ` · ${portList(model.ports)}` : ''}`,
     dot: model.starting.length > 0 ? '#fbbf24' : '#22c55e',
     dim: false,
     title: `Running: ${model.running.map((p) => p.id).join(', ')}`,

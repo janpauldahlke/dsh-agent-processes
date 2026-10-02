@@ -130,7 +130,7 @@ function ProcessCard({
   const tone = toneOf(view)
   return (
     <div style={card}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <span
           aria-hidden
           style={{
@@ -143,15 +143,11 @@ function ProcessCard({
             boxShadow: view.alive ? `0 0 5px ${TONE_DOT[tone]}` : 'none',
           }}
         />
-        <span style={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{view.id}</span>
+        <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{view.id}</span>
         {typeof view.port === 'number' ? (
-          <span style={{ ...muted, fontSize: 11 }}>:{view.port}</span>
+          <span style={{ ...muted, fontSize: 11, whiteSpace: 'nowrap' }}>:{view.port}</span>
         ) : null}
-        <span style={{ ...muted, fontSize: 11 }}>
-          {TONE_LABEL[tone]}
-          {view.alive ? ` · pid ${view.pid}` : ''} · {ageLabel(view.startedAt)}
-        </span>
-        <span style={{ flex: 1 }} />
+        <span style={{ flex: 1, minWidth: 8 }} />
         <button
           type="button"
           disabled={busy || !view.alive}
@@ -180,6 +176,10 @@ function ProcessCard({
           Clear
         </button>
       </div>
+      <p style={{ ...muted, fontSize: 11, marginTop: 4 }}>
+        {TONE_LABEL[tone]}
+        {view.alive ? ` · pid ${view.pid}` : ''} · {ageLabel(view.startedAt)}
+      </p>
       <p style={muted}>{view.cmd}</p>
       <p style={{ ...muted, opacity: 0.8 }}>{basename(view.cwd)}</p>
       <LogPreview lines={view.logPreview ?? []} />

@@ -1,157 +1,205 @@
 # dsh-agent-processes
 
-Installable [DeepSeek Harness](https://github.com/deepseek-ai) (`dsh`) plugin: **host-owned** process & port lifecycle for local coding agents.
+Host-owned **process & port lifecycle** for local coding agents in the
+**DeepSeek Harness** web UI.
 
-**Status:** **M6 — all phases shipped** (2026-09-28). Lifecycle tools + port watch/reclaim + dock chip + Processes rightbar + `GET/POST` route; dogfood `process_start → curl → process_stop` green (evidence in `agent/evidence/m5/`); long-horizon compose demo — crash → `status_block` → restart → `status_unblock` — green (evidence in `agent/evidence/m6/`). UI rendering awaits the human's visual glance (see [Limitations](#limitations-v0)).
-**Pin:** `dsh` **0.1.7-rc.2** · package `dsh-agent-processes`
-**Sibling:** `dsh-local-long-horizon` (compose partner — see [Composing](#composing-with-dsh-local-long-horizon))
-**Implementer:** local DSH agent via `dsh web`; human is the UI oracle
+Long-lived local processes started through raw `bash` become zombies: the agent
+forgets the PID, the port stays held, the next start hits `EADDRINUSE`, and the
+agent rewrites code around a bug that was really a port. This plugin gives the
+agent first-class hands — **start / stop / list / logs / wait-ready** with a
+persistent vault — plus a **Processes** rightbar and composer dock chip for the
+human.
 
-## Why
+**Related plugins** (same dual-face `dsh.bundle` shape for the web rightbar / dock):
 
-Long-lived local processes — dev servers, watchers, long `node` servers — started through
-raw `bash` become zombies: the agent forgets the PID, the port stays held, the next start
-hits `EADDRINUSE`, and the agent rewrites code around a bug that was really a port.
-This plugin gives the agent first-class, **host-owned** hands:
+| Plugin | Repo |
+| --- | --- |
+| Long-horizon task status | [`dsh-local-long-horizon`](https://github.com/janpauldahlke/dsh-local-long-horizon) |
+| NVIDIA GPU util / VRAM / power | [`dsh-gpu-monitor-nvml`](https://github.com/janpauldahlke/dsh-gpu-monitor-nvml) |
+| Local LLM endpoint / slot health | [`dsh-slot-health`](https://github.com/janpauldahlke/dsh-slot-health) |
 
-- start/stop/list/logs/wait with a persistent vault (survives harness restarts),
-- readiness-gated starts that **reclaim tracked holders** of a port and **refuse foreign
-  ones** (no untracked PID is ever killed),
-- a composer **dock chip** + **Processes** rightbar tab so the human sees and can
-  kill/restart/clear anything the agent started.
+This package: [`dsh-agent-processes`](https://github.com/janpauldahlke/dsh-agent-processes).
+
+Verified against DeepSeek Harness **`0.1.7-rc.2`** (`dsh web`).
+
+---
+
+## Requirements
+
+- DeepSeek Harness web profile (`dsh web`).
+- Node.js **≥ 20** to build.
+
+---
+
+## Screenshots
+
+Light theme, matching the DSH default.
+
+| Pane + chat (mid-run) | Processes pane (fullscreen) |
+| --- | --- |
+| ![Processes pane open](media/pane-open.png) | ![Processes fullscreen](media/processes-pane.png) |
+
+| Dock chip (rightbar closed, chat metrics active) |
+| --- |
+| ![Composer dock chip](media/dock-chip.png) |
+
+---
+
+## What you see
+
+- **Processes rightbar** — follows the open chat workspace. Per-record card:
+  status dot (green running / amber starting / red crashed / grey stopped),
+  id + port, pid + age, command, cwd basename, log preview, and
+  **Kill** / **Restart** / **Clear**.
+- **Dock chip** — on the chat metrics strip when the rightbar is closed and
+  something is running for the followed workspace (`Processes · :3000`,
+  `Processes · 3 running`, …). Click opens the pane.
+- **Tracked reclaim** — starting with a `port` stops any tracked holder of that
+  port first; **foreign (untracked) holders are refused, never killed**.
+
+---
 
 ## Install
 
 ```sh
+git clone https://github.com/janpauldahlke/dsh-agent-processes.git
+cd dsh-agent-processes
 npm install && npm run build
-dsh plugin --profile web add /abs/path/to/dsh-agent-processes
+dsh plugin --profile web add "$(pwd)"
 ```
 
-The plugin is **profile-installed** (`link:` dependency + name in
-`dsh.profile.bundles` of the web profile) and ships a single `lib/` bundle pair
-(host ESM + client CJS). No runtime `@deepseek-ai/*` dependencies. Rebuild `lib/`
-after edits; client changes hot-load into an already-running web shell, host changes
-need the web shell restarted.
+Restart (or boot) `dsh web` so the host + client faces load:
 
-## Tools (6)
+```sh
+env -u DSH_WEB_URL -u DSH_SHELL -u DSH_SESSION_ID dsh web --no-open
+```
 
-| Tool | Purpose | Key args | Returns |
-| --- | --- | --- | --- |
-| `process_start` | Spawn a detached process, track it, optionally wait for its port | `cmd`, `args`, `name?`, `cwd?`, `port?`, `env?`, `readyTimeoutMs?` | `id`, `pid`, `ready`, `waitedMs`, `reclaimed[]`, `logPreview`, `record` |
-| `process_stop` | Stop a tracked process (group SIGTERM → 3s grace → SIGKILL) | `id` | `signal`, `state`, `waitedMs` |
-| `process_list` | All tracked records, liveness re-checked | — | `processes[]`, `count` |
-| `process_logs` | Tail a record's log | `id`, `lines?` | `lines[]`, `logPath` |
-| `process_wait_ready` | Poll a tracked record's port (127.0.0.1) until it accepts connections | `id`, `timeoutMs?`, `pollMs?` | `ok`, `ready`, `port`, `waitedMs` (timeout is success-shaped with `error: 'timeout'`) |
-| `process_ping` | Plugin liveness probe | — | `ok`, `package`, `version` |
+Uninstall:
 
-**`process_start` with `port` (M3 semantics):**
-1. **Reclaim** — every tracked record with `port === P`, `state === 'running'`, live PID
-   is stopped first; reclaimed ids are reported in `reclaimed[]`.
-2. **Foreign check** — if the port still accepts connections (an untracked process holds
-   it), the start is **refused** with a typed error. The foreign process is never killed.
-3. **Readiness** — the port is "open" when a TCP connect to `127.0.0.1:P` succeeds
-   (Node `net`; no `ss`/`lsof`). Default timeout 15s (`readyTimeoutMs`); a timeout is a
-   valid success-shaped result with `error: 'port-timeout'` and the process left running.
+```sh
+dsh plugin --profile web remove dsh-agent-processes
+# restart the web instance that had the plugin
+```
 
-Records store the **lossless `argv`**, which powers `restart` (UI and route): the same
-command is re-run under the **same id**, so the UI card keeps its identity.
+No harness `file:` dependencies — the host registers tools on the live
+`ctx.tools` service provided by dsh. Rebuild `lib/` after edits; client changes
+hot-load, host changes need a web-shell restart.
 
-## HTTP route (host → pane / curl)
+---
+
+## Agent tools
+
+| Tool | Purpose |
+| --- | --- |
+| `process_start` | Spawn + track; optional port wait / reclaim |
+| `process_stop` | SIGTERM → 3s grace → SIGKILL (process group) |
+| `process_list` | All tracked records (liveness re-checked) |
+| `process_logs` | Tail a record's captured log |
+| `process_wait_ready` | Poll until `127.0.0.1:port` accepts (or timeout) |
+| `process_ping` | Plugin liveness probe |
+
+**`process_start` with `port`:**
+
+1. **Reclaim** — stop every tracked, live holder of that port; report ids in `reclaimed[]`.
+2. **Foreign check** — if the port still accepts connections, refuse with a typed error (no kill).
+3. **Readiness** — TCP connect to `127.0.0.1:P` (default timeout 15s). Timeout is a
+   success-shaped result with `error: 'port-timeout'`; the process is left running.
+
+Records store lossless `argv` so UI / route **restart** re-runs the same command
+under the same id.
+
+---
+
+## Surfaces
+
+| Surface | Path / name |
+| --- | --- |
+| Vault | `~/.dsh/storages/dsh-agent-processes/processes.json` |
+| Logs | `~/.dsh/storages/dsh-agent-processes/logs/<id>.log` |
+| HTTP | `GET` / `POST` `/api/dsh-agent-processes` |
+| UI | Rightbar **Processes** + composer dock chip |
 
 ```
 GET  /api/dsh-agent-processes
-→ { ok, package, version, storageRoot, count,
-    processes: [{ id, pid, cmd, argv, cwd, port?, logPath, startedAt,
-                  state, alive, ready?, logPreview[≤20] }] }
+→ { ok, package, version, storageRoot, count, processes: […] }
 
 POST /api/dsh-agent-processes  { "action": "stop" | "restart" | "remove", "id": "…" }
-→ the matching tool result (stop → StopResult, restart → StartResult, remove → { ok, id, existed })
-
-errors: 400 bad JSON / missing id / unknown action · 404 unknown id · 405 other methods
 ```
 
-The `ready` field is a **host-side TCP probe** taken at snapshot time for every *running*
-record that has a `port` (absent for portless records or non-alive records) — the same
-probe the client uses for its green/amber dot.
+The pane polls every 2s (refcounted — stops when the last viewer unmounts).
 
-## UI (web profile)
+---
 
-- **Dock chip** (composer dock, below the input): hidden while the pane is open or while
-  nothing runs for the followed workspace. Otherwise, per the state table:
-
-  | State | Chip |
-  | --- | --- |
-  | Nothing running | *(hidden)* |
-  | 1 healthy | `⚡ :3000 · next-dev` |
-  | N running | `⚡ 3 running · :3000, :5432` |
-  | Crashed | `⚠ 1 crashed · :3000` |
-  | Starting (port not yet accepting) | `⚡ starting…` |
-
-  Click opens the Processes tab.
-- **Processes rightbar tab**: auto-follows the open chat workspace's cwd. Per-record
-  card: status dot (green running / amber starting / red crashed / grey stopped),
-  id + `:port` + state + pid + age, command, cwd basename, expandable ≤20-line log
-  preview, and **Kill** / **Restart** / **Clear** buttons. Records from other workspaces
-  appear in a muted "Other workspaces" section.
-- The pane polls the route every 2s (refcounted — stops when the last viewer unmounts).
-
-## AGENTS.md snippet (copy into your project's AGENTS.md)
+## Recommended `AGENTS.md` snippet
 
 ```markdown
 ## Long-lived processes — use dsh-agent-processes
 
 For anything that stays up (dev servers, watchers, long `node` servers):
 
-- Start it with the `process_start` tool (include `port` if it listens). It reclaims
-  tracked holders of that port, refuses foreign ones, and waits for TCP readiness —
+- Start with `process_start` (include `port` if it listens). It reclaims tracked
+  holders of that port, refuses foreign ones, and waits for TCP readiness —
   do **not** start long-lived processes with raw `bash` or backgrounded `&`.
 - Before assuming a port is free, check `process_list`; after starting, use
   `process_wait_ready` instead of `sleep`.
-- Stop with `process_stop` (SIGTERM → 3s grace → SIGKILL). Read `process_logs` when
-  something looks wrong.
-- On a crash or port failure: read `process_logs`, then (if dsh-local-long-horizon is
-  loaded) call `status_block` with the reason, fix it, `process_start` again, verify
-  with `process_wait_ready`, then `status_unblock`.
-- Never kill untracked PIDs; if a foreign process holds the port, free it manually or
-  start on another port.
+- Stop with `process_stop`. Read `process_logs` when something looks wrong.
+- On crash or port failure: read `process_logs`, fix, `process_start` again,
+  verify with `process_wait_ready`.
+- Never kill untracked PIDs; if a foreign process holds the port, free it
+  manually or start on another port.
 ```
 
-## Storage
+---
+
+## Architecture
+
+Dual-face package (same bar as the other web rightbar / dock plugins):
+
+- **Host** (`lib/index.js`, ESM) — vault, tools, HTTP route.
+- **Client** (`lib/client.js`, CJS ModuleLoader factory) — rightbar + dock chip.
+- **Glue** — `cordis.patch.yml` + `dsh.bundle` / `dsh.client` in `package.json`.
 
 ```
-~/.dsh/storages/dsh-agent-processes/
-  processes.json        # vault: all records (atomic tmp+rename writes; corrupt → typed error)
-  logs/<id>.log         # stdout+stderr per record (append-only, tail via process_logs)
+dsh-agent-processes/
+├── package.json
+├── build.mjs
+├── cordis.patch.yml
+├── media/                 # README screenshots
+├── scripts/               # shippable lifecycle smoke
+├── test/                  # node --test (vault + service)
+├── src/host/              # vault, service, tools, route
+├── src/client/            # pane + dock chip
+├── src/shared/            # shared types
+└── lib/                   # built artifacts (required at runtime)
 ```
 
-The vault is **global** (shared by every session of the web profile) and scoped by `cwd`
-in the UI; records survive harness restarts — liveness is re-probed by PID on every list.
+---
 
-## Composing with `dsh-local-long-horizon`
-
-The v0 compose path is **agent-mediated**: the AGENTS.md snippet tells the agent that on
-a tracked-process crash or port failure it should `status_block` (sibling plugin) with
-the reason, recover via the `process_*` tools, and `status_unblock` when green. Both
-plugins read the same web shell, so the Long-horizon pane's blocked badge and the
-Processes pane's crashed card agree. Demo evidence: `agent/evidence/m6/`.
-
-## Limitations (v0)
-
-- **Tracked-only kill scope** — the plugin never signals a PID it does not track;
-  foreign port holders are refused, not killed.
-- **Crash detection is by liveness probe** (1s sampler + on-request recheck), not by
-  signal watching — a crashed process shows as red on the next poll and in `process_list`.
-- **No log rotation**; log files are append-only and grow with the process.
-- **No per-session isolation** — the vault is per web profile; UI scoping is by cwd.
-- **UI is pending human visual verification** (build agent has no vision path);
-  seat registration and state derivation are test-verified.
-- Stretch (not in v0): read-only top-N system process card (`process_list_system`).
-
-## Uninstall
+## Develop / test
 
 ```sh
-dsh plugin --profile web remove dsh-agent-processes
+npm test          # node --test (vault + service; real child processes)
+npm run smoke     # shippable lifecycle smoke (start → ready → reclaim → foreign refuse)
 ```
 
-Tools, route, chip, and tab disappear on the next shell (re)load; the vault and logs
-remain on disk (delete `~/.dsh/storages/dsh-agent-processes/` to wipe).
+---
+
+## Limitations
+
+- **Tracked-only kill scope** — never signals a PID it does not track; foreign
+  port holders are refused, not killed.
+- **Crash detection** is by liveness probe (sampler + on-request recheck), not
+  by signal watching.
+- **No log rotation** — logs are append-only.
+- **No per-session isolation** — vault is per web profile; UI scoping is by cwd.
+- Stretch (not in v0): read-only top-N system process card.
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, layout, and PR expectations.
+
+## License
+
+MIT — see [LICENSE](./LICENSE).
