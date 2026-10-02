@@ -1,6 +1,6 @@
 {
   "name": "dsh-agent-processes",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Host-owned process & port lifecycle for DeepSeek Harness local agents (start/stop/list/logs/wait-ready + dock chip + Processes rightbar).",
   "type": "module",
   "main": "lib/index.js",

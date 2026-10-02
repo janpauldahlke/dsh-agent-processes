@@ -61,6 +61,21 @@ Light theme, matching the DSH default.
 
 ## Install
 
+### From npm (recommended)
+
+```sh
+dsh plugin --profile web add dsh-agent-processes
+# restart dsh web (or rely on live patch reload), then hard-refresh the browser
+```
+
+### From GitHub
+
+```sh
+dsh plugin --profile web add github:janpauldahlke/dsh-agent-processes
+```
+
+### From a git checkout (developers)
+
 ```sh
 git clone https://github.com/janpauldahlke/dsh-agent-processes.git
 cd dsh-agent-processes
